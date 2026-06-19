@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          cd gateway
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Create test env file
+        run: |
+          cat > .env << EOF
+          OPENAI_API_KEY=sk-placeholder
+          ANTHROPIC_API_KEY=sk-ant-placeholder
+          GEMINI_API_KEY=placeholder
+          POSTGRES_URL=postgresql+asyncpg://gateway:gateway123@localhost:5432/gateway
+          REDIS_URL=redis://localhost:6379
+          QDRANT_URL=http://localhost:6333
+          GATEWAY_API_KEY=test-key
+          THRESHOLD_CODE=0.96
+          THRESHOLD_FACTUAL=0.75
+          THRESHOLD_CONCEPTUAL=0.78
+          THRESHOLD_CONVERSATIONAL=0.70
+          CB_FAILURE_THRESHOLD=5
+          CB_RECOVERY_TIMEOUT=30
+          EOF
+
+      - name: Run unit tests (cache, router, circuit breaker)
+        run: |
+          pytest tests/test_cache.py tests/test_router.py tests/test_circuit_breaker.py -v
+
+      - name: Run hit rate validation tests
+        run: |
+          pytest tests/test_hit_rate.py -v -s
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "51 tests covering cache, router, and circuit breaker" >> $GITHUB_STEP_SUMMARY
