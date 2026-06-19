@@ -36,11 +36,21 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
       - name: Install dependencies
         run: |
           cd gateway
-          pip install -r requirements.txt
+          pip install -r requirements.txt --no-cache-dir
           pip install pytest pytest-asyncio
+
+      - name: Verify critical packages installed
+        run: |
+          python -c "import fastapi; print('fastapi OK')"
+          python -c "import sentence_transformers; print('sentence_transformers OK:', sentence_transformers.__version__)"
+          python -c "import redis; print('redis OK')"
+          python -c "import qdrant_client; print('qdrant_client OK')"
 
       - name: Create test env file
         run: |
@@ -67,9 +77,3 @@ jobs:
       - name: Run hit rate validation tests
         run: |
           pytest tests/test_hit_rate.py -v -s
-
-      - name: Test summary
-        if: always()
-        run: |
-          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "51 tests covering cache, router, and circuit breaker" >> $GITHUB_STEP_SUMMARY
